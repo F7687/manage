@@ -17,9 +17,13 @@
         <el-button slot="append" icon="el-icon-search" @click="init"></el-button>
       </el-input>
       <el-button type="success" plain @click="addUserBtn">添加用户</el-button>
-      <!-- <el-button type="text" @click="dialogFormVisible = true">打开嵌套表单的 Dialog</el-button> -->
-
-      <el-dialog title="添加用户" :visible.sync="dialogFormVisible" :modal="true">
+      <!-- 添加用户 -->
+      <el-dialog
+        title="添加用户"
+        :visible.sync="dialogFormVisible"
+        :modal="true"
+        :before-close="handleClose"
+      >
         <el-form :model="addform" :rules="rules" ref="addform">
           <el-form-item label="用户名称" :label-width="formLabelWidth" prop="username">
             <el-input auto-complete="off" v-model="addform.username"></el-input>
@@ -46,6 +50,7 @@
       <el-table-column prop="role_name" label="职位" width="180"></el-table-column>
       <el-table-column prop="email" label="邮箱" width="250"></el-table-column>
       <el-table-column prop="mobile" label="电话"></el-table-column>
+      <!-- 用户状态 -->
       <el-table-column prop="mg_state" label="用户状态" width="180">
         <template slot-scope="scope">
           <el-switch
@@ -58,20 +63,24 @@
       </el-table-column>
       <el-table-column prop="caozuo" label="操作">
         <template slot-scope="scope">
+          <!-- 编辑用户 -->
           <el-tooltip class="item" effect="dark" content="编辑用户" placement="top">
             <el-button
               type="primary"
               icon="el-icon-edit"
               plain
               @click="handleEdit(scope.$index, scope.row)"
-
             ></el-button>
           </el-tooltip>
-          <!-- 编辑用户 -->
           <el-dialog title="编辑用户" :visible.sync="editdialogFormVisible" :before-close="handleClose">
             <el-form :model="editUser" ref="editUser">
               <el-form-item label="用户名称" :label-width="formLabelWidth" prop="username">
-                <el-input auto-complete="off" v-model="editUser.username"></el-input>
+                <el-input
+                  auto-complete="off"
+                  v-model="editUser.username"
+                  disabled
+                  style="width:100px"
+                ></el-input>
               </el-form-item>
               <el-form-item label="邮箱" :label-width="formLabelWidth" prop="email">
                 <el-input auto-complete="off" v-model="editUser.email"></el-input>
@@ -86,23 +95,46 @@
             </div>
           </el-dialog>
           <!-- 删除用户 -->
-           <el-tooltip class="item" effect="dark" content="删除用户" placement="top">
+          <el-tooltip class="item" effect="dark" content="删除用户" placement="top">
             <el-button
               type="danger"
               icon="el-icon-delete"
               plain
               @click="deleteHandle(scope.$index, scope.row)"
+              style="margin-left:10px"
             ></el-button>
           </el-tooltip>
           <!-- 分配用户 -->
           <el-tooltip class="item" effect="dark" content="分配用户" placement="top">
-            <el-button
-              type="warning"
-              icon="el-icon-menu"
-              plain
-
-            ></el-button>
+            <el-button type="warning" icon="el-icon-menu" plain @click="assUsers(scope.row)"></el-button>
           </el-tooltip>
+          <!-- Form -->
+          <el-dialog title="分配用户" :visible.sync="assignation">
+            <el-form :model="assignationUser">
+              <el-form-item label="用户名称" :label-width="formLabelWidth">
+                <el-input
+                  v-model="assignationUser.username"
+                  auto-complete="off"
+                  disabled
+                  style="width:100px"
+                ></el-input>
+              </el-form-item>
+              <el-form-item label="角色列表" :label-width="formLabelWidth">
+                <el-select v-model="assignationUser.rid" placeholder="请选择用户职位">
+                  <el-option
+                    v-for="item in roulesList"
+                    :key="item.value"
+                    :label="item.roleName"
+                    :value="item.id"
+                  ></el-option>
+                </el-select>
+              </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+              <el-button @click="dialogFormVisible = false">取 消</el-button>
+              <el-button type="primary" @click="endAss">确 定</el-button>
+            </div>
+          </el-dialog>
         </template>
       </el-table-column>
     </el-table>
@@ -118,7 +150,16 @@
   </div>
 </template>
 <script>
-import { getAllUsers, EditStatus, addusers, eidtUser, deleteUser } from '@/api/user.js'
+import {
+  getAllUsers,
+  EditStatus,
+  addusers,
+  eidtUser,
+  deleteUser,
+  assRoles
+} from '@/api/user.js'
+// 获取用户角色
+import { getAllRoles } from '@/api/getRoles.js'
 export default {
   data () {
     return {
@@ -129,7 +170,7 @@ export default {
       userobj: {
         query: '',
         pagenum: 1,
-        pagesize: 2
+        pagesize: 4
       },
       // 添加用户
       addform: {
@@ -151,23 +192,32 @@ export default {
             message: '请输入需要添加的用户密码',
             trigger: 'blur'
           }
-        ],
-        mobile: [
-          {
-            required: true,
-            pattern: /^1\d{10}$/,
-            message: '请输入合法的手机号',
-            trigger: 'blur'
-          }
-        ],
-        email: [
-          {
-            required: true,
-            pattern: /\w+[@]\w+[.]\w+/,
-            message: '请输入合法的电子邮箱',
-            trigger: 'blur'
-          }
         ]
+        // mobile: [
+        //   {
+        //     required: true,
+        //     pattern: /^1\d{10}$/,
+        //     message: '请输入合法的手机号',
+        //     trigger: 'blur'
+        //   },
+        //   {
+        //     required: true,
+        //     message: '请输入需要添加的用户手机号码',
+        //     trigger: 'blur'
+        //   }
+        // ],
+        // email: [
+        //   {
+        //     pattern: /\w+[@]\w+[.]\w+/,
+        //     message: '请输入合法的电子邮箱',
+        //     trigger: 'blur'
+        //   },
+        //   {
+        //     required: true,
+        //     message: '请输入需要添加的用户邮箱',
+        //     trigger: 'blur'
+        //   }
+        // ]
       },
       // 编辑用户
       editdialogFormVisible: false,
@@ -176,7 +226,15 @@ export default {
         email: '',
         mobile: '',
         id: 0
-      }
+      },
+      // 分配用户
+      assignation: false,
+      assignationUser: {
+        id: '',
+        rid: '',
+        username: ''
+      },
+      roulesList: []
     }
   },
   methods: {
@@ -184,7 +242,7 @@ export default {
     indexMethod (index) {
       return index + 1
     },
-    // 点击编辑触发的事件   rou--->scope.row uoqu到当前行的数据   index-->当前行的索引
+    // 点击编辑触发的事件   row--->scope.row uoqu到当前行的数据   index-->当前行的索引
     handleEdit (index, row) {
       this.editdialogFormVisible = true
       console.log(index, row)
@@ -237,8 +295,8 @@ export default {
       this.init()
     },
     handleCurrentChange (val) {
-      // console.log(`当前页: ${val}`)
-      // console.log(val)
+      console.log(`当前页: ${val}`)
+      console.log(val)
       this.userobj.pagenum = val
       this.init()
     },
@@ -291,7 +349,7 @@ export default {
       let id = this.editUser.id
       console.log(this.editUser)
       eidtUser(id, this.editUser)
-        .then((res) => {
+        .then(res => {
           console.log(res)
           if (res.data.meta.status === 200) {
             this.$message.success(res.data.meta.msg)
@@ -301,33 +359,85 @@ export default {
             this.$message.console.error(res.data.meta.msg)
           }
         })
-        .catch((err) => {
+        .catch(err => {
           console.log(err)
         })
     },
     // 删除功能
     deleteHandle (index, row) {
-      console.log(index, row)
-      if (confirm('确定要删除吗')) {
-        let id = row.id
-        console.log(id)
-        deleteUser(id)
-          .then((res) => {
-            if (res.data.meta.status === 200) {
-              this.$message.success(res.data.meta.msg)
-              this.init()
-            } else {
-              this.$message.error(res.data.meta.msg)
-            }
+      // console.log(index, row)
+      // console.log(this.userobj.pagesize)
+      // console.log(this.total % this.userobj.pagesize)
+      this.$confirm('此操作将永久删除该用户, 是否继续?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+        .then(() => {
+          let id = row.id
+          deleteUser(id)
+            .then(res => {
+              if (res.data.meta.status === 200) {
+                this.$message.success(res.data.meta.msg)
+                // 判断当前行是否为当前页最后一行
+                if (this.total % this.userobj.pagesize === 1) {
+                  --this.userobj.pagenum
+                }
+                this.init()
+              } else {
+                this.$message.error(res.data.meta.msg)
+              }
+            })
+            .catch(err => {
+              console.log(err)
+            })
+        })
+        .catch(() => {
+          this.$message({
+            type: 'info',
+            message: '已取消删除'
           })
-          .catch((err) => {
-            console.log(err)
-          })
-      }
+        })
+    },
+    // 分配用户
+    assUsers (row) {
+      console.log('hhhh')
+      this.assignation = true
+      console.log(row)
+      this.assignationUser.username = row.username
+      this.assignationUser.id = row.id
+      this.assignationUser.rid = row.rid
+      // console.log(this.roulesList)
+    },
+    endAss () {
+      // console.log(this.assignationUser)
+      assRoles(this.assignationUser)
+        .then((res) => {
+          // console.log(res)
+          if (res.data.meta.status === 200) {
+            this.$message.success(res.data.meta.msg)
+            this.assignation = false
+            this.init()
+          } else {
+            this.$message.error(res.data.meta.msg)
+          }
+        })
+        .catch((err) => {
+          console.log(err)
+        })
     }
   },
   mounted () {
     this.init()
+    // console.log(getAllRoles())
+    getAllRoles().then((res) => {
+      console.log(res)
+      if (res.data.meta.status === 200) {
+        this.roulesList = res.data.data
+      }
+    }).catch((err) => {
+      console.log(err)
+    })
   }
 }
 </script>

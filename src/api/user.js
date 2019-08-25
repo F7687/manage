@@ -33,3 +33,11 @@ export const deleteUser = (id) => {
     method: 'delete'
   })
 }
+// 分配用户角色
+export const assRoles = (data) => {
+  return axios({
+    url: `users/${data.id}/role`,
+    method: 'put',
+    data
+  })
+}
